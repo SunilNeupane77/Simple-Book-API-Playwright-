@@ -4,7 +4,15 @@
   "description": "Playwright API tests for the Simple Books API",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:ci": "playwright test --reporter=github",
+    "test:html": "playwright test --reporter=html",
+    "install:browsers": "npx playwright install --with-deps",
+    "ci": "npm ci && npm run install:browsers && npm test",
+    "ci:full": "npm ci && npm run install:browsers && npm run test:ci"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [],
   "author": "",

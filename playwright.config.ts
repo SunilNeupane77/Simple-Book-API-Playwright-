@@ -9,6 +9,9 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const baseURL = process.env.BASE_URL ?? 'https://simple-books-api.click';
+const reporter = process.env.CI
+  ? [['github'], ['html', { outputFolder: 'playwright-report', open: 'never' }]]
+  : [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]];
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -24,7 +27,7 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter,
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL for the Simple Books API */
