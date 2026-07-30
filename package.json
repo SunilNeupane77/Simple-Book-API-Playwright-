@@ -1,9 +1,11 @@
 {
   "name": "automation",
   "version": "1.0.0",
-  "description": "",
+  "description": "Playwright API tests for the Simple Books API",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
