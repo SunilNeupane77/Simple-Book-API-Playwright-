@@ -6,9 +6,8 @@ This project contains Playwright-based API automation tests for the Simple Books
 
 - Smoke tests for the API health endpoint
 - Book listing, filtering, and detail validation
-- Client registration validation and duplicate handling
-- Order creation, update, and deletion flows
-- Authorization checks for protected endpoints
+- Positive, negative, and boundary-value coverage for authentication and ordering flows
+- Domain-based test structure that keeps helper code separate from test cases
 
 ## Tech Stack
 
@@ -20,7 +19,8 @@ This project contains Playwright-based API automation tests for the Simple Books
 
 - [package.json](package.json) – project dependencies and scripts
 - [playwright.config.ts](playwright.config.ts) – Playwright configuration and base URL setup
-- [tests/example.spec.ts](tests/example.spec.ts) – main API test suite
+- [tests/api/](tests/api) – domain-based API specs for health/books, authentication, and orders
+- [tests/support/](tests/support) – shared helpers used by the API tests
 - [.env](.env) – local environment variables (ignored by Git)
 
 ## Getting Started
@@ -44,15 +44,15 @@ This project contains Playwright-based API automation tests for the Simple Books
 3. Run the tests:
 
    ```bash
-   npx playwright test
+   npm test
    ```
 
 ## Useful Commands
 
-Run only the main spec:
+Run the API specs only:
 
 ```bash
-npx playwright test tests/example.spec.ts
+npx playwright test tests/api
 ```
 
 Run tests with a readable terminal reporter:
@@ -76,4 +76,3 @@ npx playwright show-report
 ## License
 
 This project is licensed under ISC.
-# Simple-Book-API-Playwright-
