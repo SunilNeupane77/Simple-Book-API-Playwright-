@@ -70,7 +70,7 @@ npx playwright show-report
 ## CI/CD notes
 
 - The GitHub Actions workflow runs on pushes, pull requests, and manual dispatch.
-- CI builds use npm dependency caching, browser installation for Chromium/Firefox/WebKit, and upload the HTML report plus test artifacts even when tests fail.
+- CI builds use npm dependency caching, run the suite in Chromium, and upload the HTML report even when tests fail.
 - Playwright emits GitHub-style annotations in CI so failures are easier to review directly in pull requests.
 
 ## Notes
