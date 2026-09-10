@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { createOrder, deleteOrder, getAvailableBookId, getOrder, registerClientAndGetToken } from '../support/apiHelpers';
+import {
+  createOrder,
+  deleteOrder,
+  getAvailableBookId,
+  getOrder,
+  registerClientAndGetToken,
+  updateOrder,
+} from '../support/apiHelpers';
 
 test.describe('Simple Books API - orders', () => {
   test('creates an order for an available book and lists it', async ({ request }) => {
@@ -122,5 +129,129 @@ test.describe('Simple Books API - orders', () => {
     expect(response.status()).toBe(401);
     const body = await response.json();
     expect(body).toHaveProperty('error');
+  });
+
+  // --- positive: get single order ---
+
+  test('positive: get single order returns correct order details', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+    const created = await (await createOrder(request, accessToken, bookId, 'Alan Turing')).json();
+
+    const response = await getOrder(request, accessToken, created.orderId);
+    expect(response.status()).toBe(200);
+    const order = await response.json();
+    expect(order.id).toBe(created.orderId);
+    expect(order.bookId).toBe(bookId);
+    expect(order.customerName).toBe('Alan Turing');
+
+    await deleteOrder(request, accessToken, created.orderId);
+  });
+
+  // --- negative: get order with unknown id ---
+
+  test('negative: get order with unknown id returns 404', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const response = await getOrder(request, accessToken, 'does-not-exist');
+    expect(response.status()).toBe(404);
+    const body = await response.json();
+    expect(body).toHaveProperty('error');
+  });
+
+  // --- negative: delete already-deleted order is idempotent (404) ---
+
+  test('negative: deleting an already-deleted order returns 404', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+    const created = await (await createOrder(request, accessToken, bookId, 'Delete Twice')).json();
+
+    await deleteOrder(request, accessToken, created.orderId);
+    const secondDelete = await deleteOrder(request, accessToken, created.orderId);
+    expect(secondDelete.status()).toBe(404);
+  });
+
+  // --- boundary: customer name length ---
+
+  test('boundary: customer name of exactly 2 characters is accepted', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+    const response = await createOrder(request, accessToken, bookId, 'Jo');
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+    await deleteOrder(request, accessToken, body.orderId);
+  });
+
+  test('boundary: very long customer name is handled gracefully', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+    const longName = 'A'.repeat(300);
+    const response = await createOrder(request, accessToken, bookId, longName);
+    expect(response.status()).toBeLessThan(500);
+    if (response.status() === 201) {
+      const body = await response.json();
+      await deleteOrder(request, accessToken, body.orderId);
+    }
+  });
+
+  // --- negative: update with blank customer name ---
+
+  test('negative: update order with blank customer name returns 400', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+    const created = await (await createOrder(request, accessToken, bookId, 'Valid Name')).json();
+
+    const response = await updateOrder(request, accessToken, created.orderId, '');
+    expect(response.status()).toBe(400);
+
+    await deleteOrder(request, accessToken, created.orderId);
+  });
+
+  // --- negative: cross-client order isolation ---
+
+  test('negative: client cannot access another client\'s orders', async ({ request }) => {
+    const { accessToken: tokenA } = await registerClientAndGetToken(request);
+    const { accessToken: tokenB } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+
+    const created = await (await createOrder(request, tokenA, bookId, 'Client A Order')).json();
+
+    const response = await getOrder(request, tokenB, created.orderId);
+    expect(response.status()).toBe(404);
+
+    await deleteOrder(request, tokenA, created.orderId);
+  });
+
+  // --- end-to-end: full order lifecycle ---
+
+  test('e2e: register → create order → update → verify → delete → confirm gone', async ({ request }) => {
+    const { accessToken } = await registerClientAndGetToken(request);
+    const bookId = await getAvailableBookId(request);
+
+    // Create
+    const createResponse = await createOrder(request, accessToken, bookId, 'Initial Name');
+    expect(createResponse.status()).toBe(201);
+    const { orderId } = await createResponse.json();
+
+    // Verify created
+    const getAfterCreate = await getOrder(request, accessToken, orderId);
+    expect(getAfterCreate.status()).toBe(200);
+    expect((await getAfterCreate.json()).customerName).toBe('Initial Name');
+
+    // Update
+    const updateResponse = await updateOrder(request, accessToken, orderId, 'Updated Name');
+    expect(updateResponse.status()).toBe(204);
+
+    // Verify updated
+    const getAfterUpdate = await getOrder(request, accessToken, orderId);
+    expect(getAfterUpdate.status()).toBe(200);
+    expect((await getAfterUpdate.json()).customerName).toBe('Updated Name');
+
+    // Delete
+    const deleteResponse = await deleteOrder(request, accessToken, orderId);
+    expect(deleteResponse.status()).toBe(204);
+
+    // Confirm gone
+    const getAfterDelete = await getOrder(request, accessToken, orderId);
+    expect(getAfterDelete.status()).toBe(404);
   });
 });

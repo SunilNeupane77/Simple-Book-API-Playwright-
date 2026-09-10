@@ -83,3 +83,15 @@ export async function deleteOrder(request: APIRequestContext, token: string, ord
     headers: buildAuthHeaders(token),
   });
 }
+
+export async function updateOrder(
+  request: APIRequestContext,
+  token: string,
+  orderId: string,
+  customerName: string
+) {
+  return request.patch(`/orders/${orderId}`, {
+    headers: buildAuthHeaders(token),
+    data: { customerName },
+  });
+}
