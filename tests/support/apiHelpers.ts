@@ -95,3 +95,9 @@ export async function updateOrder(
     data: { customerName },
   });
 }
+
+export async function listOrders(request: APIRequestContext, token: string) {
+  return request.get('/orders', {
+    headers: buildAuthHeaders(token),
+  });
+}

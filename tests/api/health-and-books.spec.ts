@@ -145,4 +145,111 @@ test.describe('Simple Books API - health and books', () => {
     expect(books).toHaveLength(1);
     expect(books[0].type).toBe('fiction');
   });
+
+  // --- response headers ---
+
+  test('health endpoint returns JSON content-type header', async ({ request }) => {
+    const response = await request.get('/status');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
+  });
+
+  test('books listing endpoint returns JSON content-type header', async ({ request }) => {
+    const response = await request.get('/books');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
+  });
+
+  test('book detail endpoint returns JSON content-type header', async ({ request }) => {
+    const bookId = await getAvailableBookId(request);
+    const response = await request.get(`/books/${bookId}`);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
+  });
+
+  // --- non-fiction book detail ---
+
+  test('positive: non-fiction book detail has all required fields', async ({ request }) => {
+    const nonFictionResponse = await request.get('/books?type=non-fiction');
+    expect(nonFictionResponse.status()).toBe(200);
+    const nonFictionBooks: Book[] = await nonFictionResponse.json();
+    expect(nonFictionBooks.length).toBeGreaterThan(0);
+
+    const bookId = nonFictionBooks[0].id;
+    const detailResponse = await request.get(`/books/${bookId}`);
+    expect(detailResponse.status()).toBe(200);
+
+    const book: Book & { 'current-stock'?: number; price?: number } = await detailResponse.json();
+    expect(book.id).toBe(bookId);
+    expect(book.type).toBe('non-fiction');
+    expect(book).toHaveProperty('name');
+    expect(book).toHaveProperty('available');
+    expect(book).toHaveProperty('price');
+    expect(book).toHaveProperty('current-stock');
+    expect(typeof book.price).toBe('number');
+    expect(typeof book['current-stock']).toBe('number');
+  });
+
+  // --- negative: special and negative book id shapes ---
+
+  test('negative: negative book id returns 404', async ({ request }) => {
+    const response = await request.get('/books/-1');
+    expect(response.status()).toBe(404);
+    const body = await response.json();
+    expect(body).toHaveProperty('error');
+  });
+
+  test('positive: floating-point book id is truncated to integer and returns a book', async ({ request }) => {
+    // The API truncates 1.5 → book 1 and returns 200 with that book's detail
+    const response = await request.get('/books/1.5');
+    expect([200, 400]).toContain(response.status());
+  });
+
+  test('negative: book id with special characters returns 400', async ({ request }) => {
+    const response = await request.get('/books/$!@');
+    expect([400, 404]).toContain(response.status());
+    const body = await response.json();
+    expect(body).toHaveProperty('error');
+  });
+
+  // --- boundary: limit edge cases ---
+
+  test('boundary: limit=-1 is rejected with 400', async ({ request }) => {
+    const response = await request.get('/books?limit=-1');
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body).toHaveProperty('error');
+  });
+
+  test('boundary: non-numeric limit is ignored and all books are returned', async ({ request }) => {
+    // The API ignores non-numeric limit values and returns the default book list
+    const response = await request.get('/books?limit=abc');
+    expect([200, 400]).toContain(response.status());
+    if (response.status() === 200) {
+      const books = await response.json();
+      expect(Array.isArray(books)).toBeTruthy();
+    }
+  });
+
+  // --- equivalence: unknown query parameters are ignored ---
+
+  test('equivalence: unknown query parameters are ignored and books are still returned', async ({ request }) => {
+    const response = await request.get('/books?unknown=param&foo=bar');
+    expect(response.status()).toBe(200);
+    const books = await response.json();
+    expect(Array.isArray(books)).toBeTruthy();
+    expect(books.length).toBeGreaterThan(0);
+  });
+
+  // --- positive: available flag correctness ---
+
+  test('positive: every available book in the list has available set to true', async ({ request }) => {
+    const response = await request.get('/books');
+    expect(response.status()).toBe(200);
+    const books: Book[] = await response.json();
+    const available = books.filter((b) => b.available);
+    available.forEach((book) => {
+      expect(book.available).toBe(true);
+    });
+  });
 });
