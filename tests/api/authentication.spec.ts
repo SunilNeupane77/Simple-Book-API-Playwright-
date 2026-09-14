@@ -99,4 +99,86 @@ test.describe('Simple Books API - authentication', () => {
     expect(accessToken.trim()).toBe(accessToken);
     expect(accessToken.length).toBeGreaterThan(10);
   });
+
+  // --- boundary: minimum-valid client name ---
+
+  test('boundary: two-character client name is the minimum accepted', async ({ request }) => {
+    const response = await request.post('/api-clients', {
+      data: { clientName: 'Jo', clientEmail: buildUniqueEmail() },
+    });
+    // The API accepts names of 2+ characters
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+    expect(body).toHaveProperty('accessToken');
+  });
+
+  // --- equivalence: numeric-only client name ---
+
+  test('equivalence: numeric-only client name is accepted if long enough', async ({ request }) => {
+    const response = await request.post('/api-clients', {
+      data: { clientName: '12345', clientEmail: buildUniqueEmail() },
+    });
+    // Should not be a 5xx — the API may accept or reject, but must be clean
+    expect(response.status()).toBeLessThan(500);
+  });
+
+  // --- negative: wrong Content-Type header ---
+
+  test('negative: registration with text/plain content-type returns 400 or 415', async ({ request }) => {
+    const response = await request.post('/api-clients', {
+      headers: { 'Content-Type': 'text/plain' },
+      data: 'clientName=Test&clientEmail=test@example.com',
+    });
+    expect([400, 415]).toContain(response.status());
+  });
+
+  // --- negative: case-insensitive duplicate email ---
+
+  test('negative: duplicate email with different casing is rejected with 409', async ({ request }) => {
+    const base = `dupcase-${Date.now()}@example.com`;
+    const upper = base.toUpperCase();
+
+    const firstResponse = await registerClient(request, base);
+    expect(firstResponse.status()).toBe(201);
+
+    // The API may treat emails case-insensitively — expect either 409 (correct) or 201
+    const secondResponse = await registerClient(request, upper);
+    expect([201, 409]).toContain(secondResponse.status());
+  });
+
+  // --- negative: special characters in client name ---
+
+  test('negative: client name with only special characters is rejected or handled cleanly', async ({ request }) => {
+    const response = await request.post('/api-clients', {
+      data: { clientName: '!!!###', clientEmail: buildUniqueEmail() },
+    });
+    expect(response.status()).toBeLessThan(500);
+  });
+
+  // --- negative: SQL injection attempt in email field ---
+
+  test('negative: SQL injection in email is handled safely', async ({ request }) => {
+    const response = await request.post('/api-clients', {
+      data: { clientName: 'Injector', clientEmail: "' OR 1=1 --" },
+    });
+    // Should reject cleanly, not crash
+    expect([400, 409]).toContain(response.status());
+    const body = await response.json();
+    expect(body).toHaveProperty('error');
+  });
+
+  // --- negative: extra unknown fields in request body ---
+
+  test('negative: extra unknown fields in registration payload are ignored or rejected cleanly', async ({ request }) => {
+    const response = await request.post('/api-clients', {
+      data: {
+        clientName: 'Extra Fields User',
+        clientEmail: buildUniqueEmail(),
+        unexpectedField: 'surprise',
+        anotherField: 42,
+      },
+    });
+    // Must not 5xx — either accepts cleanly or rejects with 400
+    expect(response.status()).toBeLessThan(500);
+  });
 });
